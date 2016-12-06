@@ -36,7 +36,9 @@ if !executable(g:flow#flowpath)
 endif
 
 " flow error format.
-let s:flow_errorformat = '%EFile "%f"\, line %l\, characters %c-%.%#,%Z%m,'
+" let s:flow_errorformat = '%EFile "%f"\, line %l\, characters %c-%.%#,%Z%m,'
+let s:flow_errorformat = 'File "%f", line %l, characters %c.'
+" let s:flow_errorformat = '%E%f:%l:%c\,%n: %m'
 " flow from editor.
 let s:flow_from = '--from vim'
 
@@ -74,12 +76,30 @@ endfunction
 
 " Main interface functions.
 function! flow#typecheck()
+  let res = system('flow --from vim')
+  let arr = split(res, "\n")
+  echom arr[0]
+
+  " let &errorformat = 'File "%f"\, line %l\, characters %c'
+   
+  let &errorformat = 'File "%f"\, line %l\, characters %c-%m'
+  cgetexpr arr[0] . "\n"
+  
+
+  " let &errorformat = 'File "%f"\, %l %c'
+  " cgetexpr 'File "index.js", 2 5'
+  botright copen
+
+  return 
+
   " Flow current outputs errors to stderr and gets fancy with single character
   " files
   let flow_result = <SID>FlowClientCall('--timeout '.g:flow#timeout.' --retry-if-init false'.expand('%:p'), '2> /dev/null')
   let old_fmt = &errorformat
   let &errorformat = s:flow_errorformat
 
+
+  let flow_result = substitute(flow_result, "\n", " ", "g")
   if g:flow#errjmp
     cexpr flow_result
   else
