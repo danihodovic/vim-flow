@@ -74,44 +74,52 @@ function! <SID>FlowClientCall(cmd, suffix)
   return flow_result
 endfunction
 
+let s:errorformat_line = '%f:%l:%c%m'
+function! Format_json_error_msg(error)
+  " Extract the file, line and column from the first message
+  let first_msg = a:error.message[0]
+  let str = printf('%s:%d:%d',
+        \first_msg.loc.source,
+        \first_msg.loc.start.line,
+        \first_msg.loc.start.column
+        \)
+  " The error message is most informative when all the message.descr are concatenated
+  for message in a:error.message
+    let str .= message.descr . ' '
+  endfor
+  return str
+endfunction
+
 " Main interface functions.
 function! flow#typecheck()
-  let res = system('flow --from vim')
-  let arr = split(res, "\n")
-  echom arr[0]
+  let output = system('flow --json')
+  let dict = json_decode(output)
 
-  " let &errorformat = 'File "%f"\, line %l\, characters %c'
-   
-  let &errorformat = 'File "%f"\, line %l\, characters %c-%m'
-  cgetexpr arr[0] . "\n"
-  
+  let lines = []
+  for error in dict.errors
+    let str = Format_json_error_msg(error)
+    let lines = add(lines, str)
+  endfor
 
-  " let &errorformat = 'File "%f"\, %l %c'
-  " cgetexpr 'File "index.js", 2 5'
-  botright copen
+  " If there are no lines that means we have no errors :)
+  if len(lines) > 0
+    let old_errorformat = &errorformat
+    let &errorformat = s:errorformat_line
 
-  return 
+    if g:flow#errjmp
+      cexpr lines
+    else
+      cgetexpr lines
+    endif
 
-  " Flow current outputs errors to stderr and gets fancy with single character
-  " files
-  let flow_result = <SID>FlowClientCall('--timeout '.g:flow#timeout.' --retry-if-init false'.expand('%:p'), '2> /dev/null')
-  let old_fmt = &errorformat
-  let &errorformat = s:flow_errorformat
+    if g:flow#autoclose
+      botright cwindow
+    else
+      botright copen
+    endif
 
-
-  let flow_result = substitute(flow_result, "\n", " ", "g")
-  if g:flow#errjmp
-    cexpr flow_result
-  else
-    cgetexpr flow_result
+    let &errorformat = old_errorformat
   endif
-
-  if g:flow#autoclose
-    botright cwindow
-  else
-    botright copen
-  endif
-  let &errorformat = old_fmt
 endfunction
 
 " Get the Flow type at the current cursor position.
